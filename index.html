@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIU: Kinetic ASCII Engine</title>
+    <!-- Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/effects/AsciiEffect.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gifshot@0.4.5/dist/gifshot.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: black; font-family: monospace; }
+        
+        #ascii-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-color: black;
+        }
+
+        #ascii-container > div {
+            transition: text-shadow 0.05s ease, color 0.3s ease;
+        }
+
+        .controls-wrapper {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .controls-wrapper.hidden-menu {
+            transform: translateX(calc(100% + 10px));
+        }
+
+        .controls {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(15px);
+            padding: 1.25rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            pointer-events: auto;
+            width: 280px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .toggle-btn {
+            position: absolute;
+            left: -50px;
+            bottom: 0;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        select, input[type=range], input[type=file], input[type=text] {
+            width: 100%;
+            background: #111;
+            color: white;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 4px 5px;
+            accent-color: #6366f1;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            margin-bottom: 0.25rem;
+        }
+
+        .control-group { margin-bottom: 0.75rem; }
+
+        input[type=file]::file-selector-button {
+            background: #222;
+            color: white;
+            border: 1px solid #444;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .btn-record { background-color: #ffffff; color: #000000; font-weight: bold; border-radius: 4px; padding: 10px; width: 100%; font-size: 0.75rem; transition: transform 0.1s; }
+        .btn-record:hover { transform: scale(1.02); background-color: #f3f4f6; }
+        .btn-stop { background-color: #ffffff; color: #000000; font-weight: bold; border-radius: 4px; padding: 10px; width: 100%; font-size: 0.75rem; display: none; }
+        .btn-stop:hover { background-color: #f3f4f6; }
+        .btn-download { background-color: #ffffff; color: #000000; font-weight: bold; border-radius: 4px; padding: 10px; width: 100%; font-size: 0.75rem; display: none; margin-top: 5px; }
+        .btn-download:hover { background-color: #f3f4f6; }
+        
+        .recording-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ascii-container"></div>
+
+    <div class="controls-wrapper" id="menuWrapper">
+        <button class="toggle-btn" id="toggleMenu" title="Toggle Menu">
+            <svg id="toggleIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+        <div class="controls">
+            <!-- Media Upload Section -->
+            <div class="control-group">
+                <label>Upload Media (GLB, Video, Image)</label>
+                <input type="file" id="glbUpload" accept=".glb,.gltf,.mp4,.webm,.webp,.png,.jpg">
+            </div>
+            <div class="control-group">
+                <label>Geometry</label>
+                <select id="shapeSelect">
+                    <option value="box">Box</option>
+                    <option value="sphere">Sphere</option>
+                    <option value="torus">Torus</option>
+                    <option value="knot">Torus Knot</option>
+                    <option value="diamond">Diamond</option>
+                    <option value="star">3D Star ⭐</option>
+                    <option value="emoji">Emoji / Text 🔡</option>
+                    <option value="cat">Cyber Cat 🐱</option>
+                    <option value="rex">ASCII Rex 🦖</option>
+                    <option value="bird">Low Poly Bird 🐦</option>
+                    <option value="spider">Spider 🕷️</option>
+                    <option value="custom" disabled id="customOption">Custom Model</option>
+                    <option value="video" disabled id="videoOption">Custom Media</option>
+                </select>
+            </div>
+
+            <div id="emojiInputGroup" class="control-group hidden">
+                <label>Input Emoji / Text</label>
+                <input type="text" id="emojiInput" value="💀" maxlength="5">
+            </div>
+
+            <hr class="border-gray-800 my-3">
+
+            <!-- Deformation Section -->
+            <div class="control-group">
+                <label>Deformation Mode</label>
+                <select id="deformMode">
+                    <option value="none">None</option>
+                    <option value="twist" selected>Twist</option>
+                    <option value="taper">Taper</option>
+                    <option value="wave">Wave</option>
+                    <option value="bend">Bend</option>
+                    <option value="combined">Everything</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label id="intensityLabel">Deform Intensity</label>
+                <input type="range" id="deformIntensity" min="0" max="5" step="0.01" value="1.5">
+            </div>
+
+            <hr class="border-gray-800 my-3">
+
+            <!-- Aesthetics Section -->
+            <div class="control-group">
+                <label>Theme</label>
+                <select id="themeSelect">
+                    <option value="white">Monochrome</option>
+                    <option value="matrix">The Matrix (Green)</option>
+                    <option value="vaporwave">Vaporwave (Pink/Cyan)</option>
+                    <option value="cyberpunk">Cyberpunk (Yellow/Neon)</option>
+                    <option value="blood">Blood Red</option>
+                    <option value="gold">Amber Terminal</option>
+                    <option value="toxic">Toxic Waste</option>
+                    <option value="deepsea">Deep Sea</option>
+                    <option value="ice">Ice Cold</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>ASCII Set</label>
+                <select id="charsetSelect">
+                    <option value="standard">Standard</option>
+                    <option value="detailed">Detailed</option>
+                    <option value="binary">Binary</option>
+                    <option value="blocks">Blocks</option>
+                    <option value="minimal">Minimal</option>
+                    <option value="alphanumeric">Alphanumeric</option>
+                    <option value="geometric">Geometric</option>
+                    <option value="matrix">Matrix Style</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div class="control-group">
+                    <label>ASCII Res</label>
+                    <input type="range" id="resolution" min="0.05" max="0.25" step="0.01" value="0.15">
+                </div>
+                <div class="control-group">
+                    <label>Glitch</label>
+                    <input type="range" id="glitchIntensity" min="0" max="1" step="0.01" value="0.3">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div class="control-group">
+                    <label>Anim Speed</label>
+                    <input type="range" id="animSpeed" min="0" max="2" step="0.05" value="0.8">
+                </div>
+                <div class="control-group">
+                    <label>Rot Speed</label>
+                    <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+                </div>
+            </div>
+
+            <hr class="border-gray-800 my-3">
+
+            <!-- Exporter Section -->
+            <div class="control-group">
+                <label>Exporter</label>
+                <div id="recIndicator" class="hidden flex items-center mb-2 text-[10px] text-red-500 font-bold uppercase tracking-wider">
+                    <span class="recording-indicator"></span> <span id="statusText">Live Recording</span>
+                </div>
+                <div class="flex gap-2 mb-2">
+                    <select id="exportFormat" class="flex-1">
+                        <option value="webm">WEBM (Video)</option>
+                        <option value="mp4">MP4 (Video)</option>
+                        <option value="gif">GIF (Image)</option>
+                    </select>
+                </div>
+                <button id="recordBtn" class="btn-record">START RECORDING</button>
+                <button id="stopBtn" class="btn-stop">STOP RECORDING</button>
+                <button id="downloadBtn" class="btn-download">DOWNLOAD CLIP</button>
+            </div>
+
+            <div class="text-[9px] text-gray-600 mt-2 text-center">
+                DRAG TO ROTATE • SCROLL TO ZOOM • TYPING GEOMETRY
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Message Box -->
+    <div id="msgBox" class="fixed top-4 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2 rounded-full text-xs font-bold shadow-lg opacity-0 transition-opacity pointer-events-none z-[200]"></div>
+
+    <script>
+        let scene, camera, renderer, effect, currentObject, originalData = new Map();
+        let lastUploadedModel = null, lastUploadedModelOriginalData = new Map();
+        let lastUploadedVideo = null, lastUploadedVideoOriginalData = new Map();
+        let targetRotationX = 0, targetRotationY = 0;
+        let continuousRotation = 0;
+
+        // Recording state
+        let mediaRecorder, recordedChunks = [], isRecording = false, recordingCanvas, recordingCtx, downloadUrl = null, activeFormat = 'webm', gifFrames = [];
+        
+        const charsets = {
+            standard: ' .:-+*=%@#',
+            detailed: ' .\'`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczMW&8%B@$',
+            binary: ' 01',
+            blocks: ' ░▒▓█',
+            minimal: ' .·',
+            alphanumeric: ' ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            geometric: ' .·°º¤øØ',
+            matrix: ' /\\+|-'
+        };
+
+        const themes = {
+            white: { color: '#ffffff', glitch: ['rgba(255,0,0,0.8)', 'rgba(0,255,255,0.8)'] },
+            matrix: { color: '#00ff41', glitch: ['rgba(0,255,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            vaporwave: { color: '#ff71ce', glitch: ['rgba(0,255,255,0.8)', 'rgba(255,255,255,0.8)'] },
+            cyberpunk: { color: '#f3f315', glitch: ['rgba(255,0,255,0.8)', 'rgba(0,255,255,0.8)'] },
+            blood: { color: '#ff0000', glitch: ['rgba(100,0,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            gold: { color: '#ffb000', glitch: ['rgba(255,100,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            toxic: { color: '#adff2f', glitch: ['rgba(0,255,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            deepsea: { color: '#00ced1', glitch: ['rgba(0,0,255,0.8)', 'rgba(255,255,255,0.8)'] },
+            ice: { color: '#f0f8ff', glitch: ['rgba(173,216,230,0.8)', 'rgba(255,255,255,0.8)'] }
+        };
+
+        const params = { intensity: 1.5, animSpeed: 0.8, pauseThreshold: 0.3, rotationSpeed: 0.01, glitchIntensity: 0.3, resolution: 0.15, charset: 'standard', theme: 'white', shape: 'box', deformMode: 'twist' };
+
+        function showMessage(text) {
+            const box = document.getElementById('msgBox');
+            box.textContent = text;
+            box.style.opacity = '1';
+            setTimeout(() => { box.style.opacity = '0'; }, 3000);
+        }
+
+        function init() {
+            if (window.innerWidth === 0 || window.innerHeight === 0) {
+                setTimeout(init, 100);
+                return;
+            }
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 1500);
+            camera.position.z = 500;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            updateEffect();
+
+            const pointLight1 = new THREE.PointLight(0xffffff, 1.2);
+            pointLight1.position.set(500, 500, 500);
+            scene.add(pointLight1);
+
+            const pointLight2 = new THREE.PointLight(0xffffff, 0.4);
+            pointLight2.position.set(-500, -500, -500);
+            scene.add(pointLight2);
+
+            createShape();
+
+            document.getElementById('toggleMenu').onclick = () => document.getElementById('menuWrapper').classList.toggle('hidden-menu');
+            document.getElementById('shapeSelect').onchange = (e) => { 
+                params.shape = e.target.value; 
+                document.getElementById('emojiInputGroup').classList.toggle('hidden', params.shape !== 'emoji');
+                createShape(); 
+            };
+            document.getElementById('emojiInput').oninput = createShape;
+
+            document.getElementById('deformIntensity').oninput = (e) => params.intensity = parseFloat(e.target.value);
+            document.getElementById('themeSelect').onchange = (e) => { params.theme = e.target.value; updateTheme(); };
+            document.getElementById('charsetSelect').onchange = (e) => { params.charset = e.target.value; updateEffect(); };
+            document.getElementById('resolution').oninput = (e) => { params.resolution = parseFloat(e.target.value); updateEffect(); };
+            document.getElementById('animSpeed').oninput = (e) => params.animSpeed = parseFloat(e.target.value);
+            document.getElementById('rotationSpeed').oninput = (e) => params.rotationSpeed = parseFloat(e.target.value);
+            document.getElementById('glitchIntensity').oninput = (e) => params.glitchIntensity = parseFloat(e.target.value);
+            document.getElementById('glbUpload').addEventListener('change', handleUpload);
+            document.getElementById('recordBtn').onclick = startRecording;
+            document.getElementById('stopBtn').onclick = stopRecording;
+            document.getElementById('downloadBtn').onclick = downloadClip;
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', onDocumentMouseMove, false);
+            document.addEventListener('wheel', onDocumentWheel, false);
+            
+            animate();
+        }
+
+        // --- Emoji Texture Helper ---
+        function createEmojiTexture(char) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.font = '380px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(char, 256, 256);
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        function mergeParts(group) {
+            const geometries = [];
+            group.traverse(n => {
+                if (n.isMesh) {
+                    n.updateMatrix();
+                    let g = n.geometry.clone().toNonIndexed();
+                    g.applyMatrix4(n.matrix);
+                    geometries.push(g);
+                }
+            });
+            const totalVertices = geometries.reduce((sum, g) => sum + g.attributes.position.count, 0);
+            const positions = new Float32Array(totalVertices * 3);
+            const normals = new Float32Array(totalVertices * 3);
+            
+            let offset = 0;
+            geometries.forEach(g => {
+                positions.set(g.attributes.position.array, offset * 3);
+                if (g.attributes.normal) normals.set(g.attributes.normal.array, offset * 3);
+                offset += g.attributes.position.count;
+            });
+
+            const merged = new THREE.BufferGeometry();
+            merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+            merged.computeVertexNormals();
+            return merged;
+        }
+
+        function createAnimalGeometry(type) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshPhongMaterial();
+            
+            if (type === 'cat') {
+                const body = new THREE.Mesh(new THREE.BoxGeometry(70, 50, 110), mat);
+                const head = new THREE.Mesh(new THREE.BoxGeometry(45, 45, 45), mat); head.position.set(0, 35, 65);
+                const earL = new THREE.Mesh(new THREE.ConeGeometry(12, 25, 4), mat); earL.position.set(-15, 65, 65);
+                const earR = new THREE.Mesh(new THREE.ConeGeometry(12, 25, 4), mat); earR.position.set(15, 65, 65);
+                const leg = new THREE.BoxGeometry(12, 35, 12);
+                const fl = new THREE.Mesh(leg, mat); fl.position.set(-20, -35, 45);
+                const fr = new THREE.Mesh(leg, mat); fr.position.set(20, -35, 45);
+                const bl = new THREE.Mesh(leg, mat); bl.position.set(-20, -35, -45);
+                const br = new THREE.Mesh(leg, mat); br.position.set(20, -35, -45);
+                const tail = new THREE.Mesh(new THREE.CylinderGeometry(6, 4, 80), mat);
+                tail.position.set(0, 20, -85); tail.rotation.x = Math.PI/3;
+                group.add(body, head, earL, earR, fl, fr, bl, br, tail);
+            } else if (type === 'rex') {
+                const body = new THREE.Mesh(new THREE.BoxGeometry(80, 100, 140), mat);
+                const neck = new THREE.Mesh(new THREE.BoxGeometry(40, 70, 40), mat); neck.position.set(0, 60, 80); neck.rotation.x = -0.5;
+                const head = new THREE.Mesh(new THREE.BoxGeometry(50, 60, 90), mat); head.position.set(0, 95, 120);
+                const tail = new THREE.Mesh(new THREE.ConeGeometry(30, 180, 6), mat); tail.position.set(0, -10, -140); tail.rotation.x = -Math.PI/2 - 0.2;
+                const leg = new THREE.BoxGeometry(25, 110, 40);
+                const ll = new THREE.Mesh(leg, mat); ll.position.set(-40, -85, 0);
+                const lr = new THREE.Mesh(leg, mat); lr.position.set(40, -85, 0);
+                const arm = new THREE.BoxGeometry(10, 30, 10);
+                const al = new THREE.Mesh(arm, mat); al.position.set(-45, 10, 75);
+                const ar = new THREE.Mesh(arm, mat); ar.position.set(45, 10, 75);
+                group.add(body, head, neck, tail, ll, lr, al, ar);
+            } else if (type === 'bird') {
+                const body = new THREE.Mesh(new THREE.SphereGeometry(60, 10, 10), mat);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(35, 10, 10), mat); head.position.set(0, 35, 55);
+                const beak = new THREE.Mesh(new THREE.ConeGeometry(8, 35, 4), mat); beak.position.set(0, 35, 90); beak.rotation.x = Math.PI/2;
+                const wingL = new THREE.Mesh(new THREE.BoxGeometry(120, 4, 70), mat); wingL.position.set(-75, 15, 0); wingL.rotation.z = 0.5; wingL.rotation.y = -0.2;
+                const wingR = new THREE.Mesh(new THREE.BoxGeometry(120, 4, 70), mat); wingR.position.set(75, 15, 0); wingR.rotation.z = -0.5; wingR.rotation.y = 0.2;
+                const btail = new THREE.Mesh(new THREE.BoxGeometry(60, 4, 60), mat); btail.position.set(0, 0, -85); btail.rotation.x = 0.2;
+                group.add(body, head, beak, wingL, wingR, btail);
+            } else if (type === 'star') {
+                const points = 5;
+                const inner = 120, outer = 160;
+                for (let i = 0; i < points * 2; i++) {
+                    const angle = (i / (points * 2)) * Math.PI * 2;
+                    const len = (i % 2 === 0) ? outer : inner;
+                    const spike = new THREE.Mesh(new THREE.ConeGeometry(35, len, 4), mat);
+                    spike.position.set(Math.cos(angle) * 40, Math.sin(angle) * 40, 0);
+                    spike.rotation.z = angle - Math.PI / 2;
+                    group.add(spike);
+                }
+            } else if (type === 'spider') {
+                const abdomen = new THREE.Mesh(new THREE.SphereGeometry(50, 12, 12), mat);
+                abdomen.scale.set(1.1, 0.8, 1.4);
+                abdomen.position.set(0, 0, -40);
+                const thorax = new THREE.Mesh(new THREE.SphereGeometry(35, 10, 10), mat);
+                thorax.scale.set(1, 0.7, 1);
+                thorax.position.set(0, -5, 45);
+                group.add(abdomen, thorax);
+                const femurGeom = new THREE.BoxGeometry(6, 6, 60);
+                const tarsusGeom = new THREE.BoxGeometry(4, 4, 80);
+                for (let i = 0; i < 4; i++) {
+                    const zPos = 30 + (i * 12);
+                    const spread = (i - 1.5) * 0.4;
+                    const legL_femur = new THREE.Mesh(femurGeom, mat);
+                    legL_femur.position.set(-35, 10, zPos);
+                    legL_femur.rotation.set(0.6, 0.5 + spread, 0.8);
+                    const legL_tarsus = new THREE.Mesh(tarsusGeom, mat);
+                    legL_tarsus.position.set(-75, -20, zPos + 10);
+                    legL_tarsus.rotation.set(-0.4, 0.5 + spread, 0.2);
+                    const legR_femur = new THREE.Mesh(femurGeom, mat);
+                    legR_femur.position.set(35, 10, zPos);
+                    legR_femur.rotation.set(0.6, -0.5 - spread, -0.8);
+                    const legR_tarsus = new THREE.Mesh(tarsusGeom, mat);
+                    legR_tarsus.position.set(75, -20, zPos + 10);
+                    legR_tarsus.rotation.set(-0.4, -0.5 - spread, -0.2);
+                    group.add(legL_femur, legL_tarsus, legR_femur, legR_tarsus);
+                }
+            }
+            return mergeParts(group);
+        }
+
+        function handleUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (extension === 'glb' || extension === 'gltf') {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    new THREE.GLTFLoader().parse(e.target.result, '', (gltf) => { setupCustomModel(gltf.scene); });
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (file.type.startsWith('video')) {
+                setupVideoModel(file);
+            } else if (file.type.startsWith('image')) {
+                setupImageModel(file);
+            } else {
+                showMessage("Format not recognized.");
+            }
+        }
+
+        function setupCustomModel(model) {
+            originalData.clear(); lastUploadedModelOriginalData.clear();
+            const box = new THREE.Box3().setFromObject(model);
+            const scale = 250 / Math.max(...box.getSize(new THREE.Vector3()).toArray());
+            model.scale.set(scale, scale, scale);
+            model.position.sub(box.getCenter(new THREE.Vector3()).multiplyScalar(scale));
+            lastUploadedModel = new THREE.Group();
+            lastUploadedModel.add(model);
+            lastUploadedModel.traverse((node) => {
+                if (node.isMesh && node.geometry) {
+                    node.material = new THREE.MeshPhongMaterial({ flatShading: true });
+                    lastUploadedModelOriginalData.set(node.id, node.geometry.attributes.position.array.slice());
+                }
+            });
+            params.shape = 'custom';
+            document.getElementById('customOption').disabled = false;
+            document.getElementById('shapeSelect').value = 'custom';
+            createShape();
+        }
+
+        function setupVideoModel(file) {
+            const url = URL.createObjectURL(file);
+            const video = document.createElement('video');
+            video.src = url; video.loop = true; video.muted = true; video.playsInline = true; video.crossOrigin = "anonymous";
+            video.onloadedmetadata = () => {
+                const aspect = video.videoWidth / video.videoHeight;
+                const geometry = new THREE.PlaneGeometry(350 * aspect, 350, 64, 64);
+                lastUploadedVideo = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ map: new THREE.VideoTexture(video), side: THREE.DoubleSide }));
+                lastUploadedVideoOriginalData.clear();
+                lastUploadedVideoOriginalData.set(lastUploadedVideo.id, geometry.attributes.position.array.slice());
+                params.shape = 'video';
+                document.getElementById('videoOption').disabled = false;
+                document.getElementById('shapeSelect').value = 'video';
+                createShape();
+                video.play().catch(e => console.warn("Auto-play failed.", e));
+            };
+        }
+
+        function setupImageModel(file) {
+            const url = URL.createObjectURL(file);
+            new THREE.TextureLoader().load(url, (texture) => {
+                const aspect = texture.image.width / texture.image.height;
+                const geometry = new THREE.PlaneGeometry(350 * aspect, 350, 64, 64);
+                lastUploadedVideo = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ map: texture, side: THREE.DoubleSide }));
+                lastUploadedVideoOriginalData.clear();
+                lastUploadedVideoOriginalData.set(lastUploadedVideo.id, geometry.attributes.position.array.slice());
+                params.shape = 'video';
+                document.getElementById('videoOption').disabled = false;
+                document.getElementById('shapeSelect').value = 'video';
+                createShape();
+            });
+        }
+
+        function createShape() {
+            if (currentObject) scene.remove(currentObject);
+            originalData.clear();
+            
+            if (params.shape === 'custom' && lastUploadedModel) {
+                currentObject = lastUploadedModel;
+                scene.add(currentObject);
+                lastUploadedModelOriginalData.forEach((val, key) => { originalData.set(key, val); });
+                return;
+            }
+            if (params.shape === 'video' && lastUploadedVideo) {
+                currentObject = lastUploadedVideo;
+                scene.add(currentObject);
+                lastUploadedVideoOriginalData.forEach((val, key) => { originalData.set(key, val); });
+                return;
+            }
+
+            let geometry;
+            if (params.shape === 'emoji') {
+                const text = document.getElementById('emojiInput').value || '💀';
+                geometry = new THREE.PlaneGeometry(350, 350, 64, 64);
+                const tex = createEmojiTexture(text);
+                currentObject = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ map: tex, side: THREE.DoubleSide, transparent: true, alphaTest: 0.5 }));
+            } else {
+                switch(params.shape) {
+                    case 'sphere': geometry = new THREE.SphereGeometry(140, 48, 48); break;
+                    case 'torus': geometry = new THREE.TorusGeometry(100, 40, 48, 100); break;
+                    case 'knot': geometry = new THREE.TorusKnotGeometry(100, 30, 200, 32); break;
+                    case 'cylinder': geometry = new THREE.CylinderGeometry(100, 100, 250, 48, 48); break;
+                    case 'cone': geometry = new THREE.ConeGeometry(120, 250, 48, 48); break;
+                    case 'icosahedron': geometry = new THREE.IcosahedronGeometry(150, 15); break;
+                    case 'diamond': geometry = new THREE.OctahedronGeometry(150, 0); break;
+                    case 'star': case 'cat': case 'rex': case 'bird': case 'spider': geometry = createAnimalGeometry(params.shape); break;
+                    default: geometry = new THREE.BoxGeometry(200, 200, 200, 48, 48, 48);
+                }
+                currentObject = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ flatShading: true }));
+            }
+
+            scene.add(currentObject);
+            originalData.set(currentObject.id, currentObject.geometry.attributes.position.array.slice());
+        }
+
+        function startRecording() {
+            activeFormat = document.getElementById('exportFormat').value;
+            if (activeFormat === 'gif' && typeof gifshot === 'undefined') { showMessage("GIF library loading..."); return; }
+            isRecording = true; recordedChunks = []; gifFrames = [];
+            recordingCanvas = document.createElement('canvas');
+            const scale = activeFormat === 'gif' ? 0.5 : 1.0;
+            recordingCanvas.width = Math.max(1, window.innerWidth * scale);
+            recordingCanvas.height = Math.max(1, window.innerHeight * scale);
+            recordingCtx = recordingCanvas.getContext('2d');
+            
+            if (activeFormat !== 'gif') {
+                const stream = recordingCanvas.captureStream(30); 
+                let mimeType = activeFormat === 'mp4' ? 'video/mp4' : 'video/webm;codecs=vp9';
+                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = activeFormat === 'mp4' ? 'video/mp4' : 'video/webm';
+                try { 
+                    mediaRecorder = new MediaRecorder(stream, { mimeType }); 
+                    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(recordedChunks, { type: activeFormat === 'mp4' ? 'video/mp4' : 'video/webm' });
+                        if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+                        downloadUrl = URL.createObjectURL(blob);
+                        document.getElementById('downloadBtn').textContent = `DOWNLOAD ${activeFormat.toUpperCase()} CLIP`;
+                        document.getElementById('downloadBtn').style.display = 'block';
+                    };
+                    mediaRecorder.start();
+                } catch (e) { showMessage("Recording error: " + e.message); isRecording = false; return; }
+            }
+            document.getElementById('recordBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'block';
+            document.getElementById('downloadBtn').style.display = 'none';
+            document.getElementById('recIndicator').classList.remove('hidden');
+            document.getElementById('statusText').textContent = "Live Recording";
+        }
+
+        function stopRecording() {
+            if (activeFormat !== 'gif') { if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); isRecording = false; } 
+            else {
+                document.getElementById('statusText').textContent = "Rendering GIF...";
+                document.getElementById('stopBtn').disabled = true;
+                gifshot.createGIF({ images: gifFrames, gifWidth: recordingCanvas.width, gifHeight: recordingCanvas.height, interval: 0.1, numWorkers: 2 }, (obj) => {
+                    if (!obj.error) {
+                        downloadUrl = obj.image;
+                        document.getElementById('downloadBtn').textContent = `DOWNLOAD GIF`;
+                        document.getElementById('downloadBtn').style.display = 'block';
+                    }
+                    isRecording = false;
+                    document.getElementById('stopBtn').disabled = false;
+                    document.getElementById('recordBtn').style.display = 'block';
+                    document.getElementById('stopBtn').style.display = 'none';
+                    document.getElementById('recIndicator').classList.add('hidden');
+                });
+            }
+            if (activeFormat !== 'gif') { document.getElementById('recordBtn').style.display = 'block'; document.getElementById('stopBtn').style.display = 'none'; document.getElementById('recIndicator').classList.add('hidden'); }
+        }
+
+        function downloadClip() {
+            if (!downloadUrl) return;
+            const a = document.createElement('a'); a.href = downloadUrl; a.download = `ascii_twist_${Date.now()}.${activeFormat}`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        let frameCounter = 0;
+        function captureAsciiToCanvas() {
+            if (!isRecording || !recordingCtx || window.innerWidth === 0) return;
+            recordingCtx.fillStyle = 'black'; recordingCtx.fillRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+            recordingCtx.fillStyle = themes[params.theme].color;
+            const textElement = effect.domElement;
+            const lines = textElement.innerText.split('\n');
+            const fontSize = recordingCanvas.height / (lines.length || 1);
+            recordingCtx.font = `${fontSize}px monospace`;
+            lines.forEach((line, i) => { recordingCtx.fillText(line, 0, (i + 1) * fontSize); });
+            if (params.glitchIntensity > 0 && Math.random() < 0.1 * params.glitchIntensity) {
+                recordingCtx.globalCompositeOperation = 'screen';
+                recordingCtx.fillStyle = 'rgba(255,0,0,0.5)'; recordingCtx.fillText(textElement.innerText, (Math.random()-0.5)*10, fontSize);
+                recordingCtx.fillStyle = 'rgba(0,255,255,0.5)'; recordingCtx.fillText(textElement.innerText, (Math.random()-0.5)*-10, fontSize);
+                recordingCtx.globalCompositeOperation = 'source-over';
+            }
+            if (activeFormat === 'gif') { frameCounter++; if (frameCounter % 3 === 0) { gifFrames.push(recordingCanvas.toDataURL('image/png')); } }
+        }
+
+        function updateEffect() {
+            const container = document.getElementById('ascii-container');
+            if (effect) container.removeChild(effect.domElement);
+            const w = Math.max(window.innerWidth, 1);
+            const h = Math.max(window.innerHeight, 1);
+            renderer.setSize(w, h);
+            effect = new THREE.AsciiEffect(renderer, charsets[params.charset], { invert: true, resolution: params.resolution });
+            effect.setSize(w, h);
+            container.appendChild(effect.domElement);
+            updateTheme();
+        }
+
+        function updateTheme() { effect.domElement.style.color = themes[params.theme].color; effect.domElement.style.backgroundColor = 'black'; }
+        
+        function onWindowResize() { 
+            const w = Math.max(window.innerWidth, 1);
+            const h = Math.max(window.innerHeight, 1);
+            camera.aspect = w / h; 
+            camera.updateProjectionMatrix(); 
+            renderer.setSize(w, h); 
+            if (effect) effect.setSize(w, h); 
+        }
+
+        function onDocumentMouseMove(e) { if (e.buttons === 1) { targetRotationY += (e.movementX * 0.005); targetRotationX += (e.movementY * 0.005); } }
+        function onDocumentWheel(e) { camera.position.z = Math.max(200, Math.min(1000, camera.position.z + e.deltaY * 0.5)); }
+
+        function applyDeformation() {
+            if (!currentObject) return;
+            const time = Date.now() * 0.001 * params.animSpeed;
+            continuousRotation += params.rotationSpeed;
+            currentObject.rotation.y = continuousRotation;
+            const pulse = 1 + Math.sin(time * 0.5) * 0.1;
+            currentObject.scale.set(pulse, pulse, pulse);
+            const rawCycle = Math.sin(time);
+            const cycleFactor = Math.abs(rawCycle) > params.pauseThreshold ? Math.sign(rawCycle) * ((Math.abs(rawCycle) - params.pauseThreshold) / (1.0 - params.pauseThreshold)) : 0;
+            currentObject.traverse((node) => {
+                if (node.isMesh && originalData.has(node.id)) {
+                    const original = originalData.get(node.id);
+                    const positions = node.geometry.attributes.position.array;
+                    for (let i = 0; i < positions.length; i += 3) {
+                        let x = original[i], y = original[i + 1], z = original[i + 2];
+                        const mode = params.deformMode;
+                        if (mode === 'taper' || mode === 'combined') { const taper = 1 + (y / 100) * (params.intensity / 2) * cycleFactor; x *= taper; z *= taper; }
+                        if (mode === 'wave' || mode === 'combined') { x += Math.sin(y * 0.05 + time * 2) * params.intensity * cycleFactor * 10; }
+                        if (mode === 'bend' || mode === 'combined') { const bend = (params.intensity / 5) * (y / 100) * (y / 100) * cycleFactor * 50; x += bend; }
+                        if (mode === 'twist' || mode === 'combined') { const angle = y * (params.intensity / 100) * cycleFactor; const s = Math.sin(angle), c = Math.cos(angle); const nx = x * c - z * s, nz = x * s + z * c; x = nx; z = nz; }
+                        positions[i] = x; positions[i+1] = y; positions[i+2] = z;
+                    }
+                    node.geometry.attributes.position.needsUpdate = true;
+                }
+            });
+        }
+
+        function updateGlitchEffect() {
+            if (params.glitchIntensity <= 0) { effect.domElement.style.textShadow = 'none'; effect.domElement.style.transform = 'none'; return; }
+            const intensity = params.glitchIntensity;
+            if (Math.random() < (0.1 * intensity) || Math.random() < 0.2) {
+                const rX = (Math.random() - 0.5) * 15 * intensity, bX = (Math.random() - 0.5) * -15 * intensity;
+                effect.domElement.style.textShadow = `${rX}px 0 ${themes[params.theme].glitch[0]}, ${bX}px 0 ${themes[params.theme].glitch[1]}`;
+                if (Math.random() < 0.05 * intensity) effect.domElement.style.transform = `translate(${(Math.random()-0.5)*20*intensity}px, 0) skew(${(Math.random()-0.5)*10*intensity}deg)`;
+            } else { effect.domElement.style.textShadow = `none`; effect.domElement.style.transform = 'none'; }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (window.innerWidth === 0 || window.innerHeight === 0 || !effect) return;
+            scene.rotation.y += (targetRotationY - scene.rotation.y) * 0.05;
+            scene.rotation.x += (targetRotationX - scene.rotation.x) * 0.05;
+            applyDeformation(); 
+            updateGlitchEffect();
+            if (isRecording) captureAsciiToCanvas();
+            try { effect.render(scene, camera); } catch (e) {}
+        }
+        
+        window.onload = init;
+    </script>
+</body>
+</html>
