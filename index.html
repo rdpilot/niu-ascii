@@ -11,7 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gifshot@0.4.5/dist/gifshot.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: black; font-family: monospace; }
+        body { margin: 0; overflow: hidden; background-color: black; font-family: monospace; transition: background-color 0.3s ease; }
         
         #ascii-container {
             width: 100vw;
@@ -20,7 +20,6 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            background-color: black;
         }
 
         #ascii-container > div {
@@ -75,7 +74,7 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
-        select, input[type=range], input[type=file], input[type=text] {
+        select, input[type=range], input[type=file], input[type=text], input[type=color] {
             width: 100%;
             background: #111;
             color: white;
@@ -85,6 +84,11 @@
             accent-color: #6366f1;
             cursor: pointer;
             font-size: 0.75rem;
+        }
+
+        input[type=color] {
+            height: 30px;
+            padding: 2px;
         }
 
         label {
@@ -204,8 +208,24 @@
                     <option value="toxic">Toxic Waste</option>
                     <option value="deepsea">Deep Sea</option>
                     <option value="ice">Ice Cold</option>
+                    <option value="custom">Custom Color 🎨</option>
                 </select>
             </div>
+
+            <!-- Custom Color Controls -->
+            <div id="customColorGroup" class="hidden space-y-2 mb-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label>Background</label>
+                        <input type="color" id="bgColorPicker" value="#000000">
+                    </div>
+                    <div>
+                        <label>ASCII Color</label>
+                        <input type="color" id="textColorPicker" value="#ffffff">
+                    </div>
+                </div>
+            </div>
+
             <div class="control-group">
                 <label>ASCII Set</label>
                 <select id="charsetSelect">
@@ -263,7 +283,7 @@
             </div>
 
             <div class="text-[9px] text-gray-600 mt-2 text-center">
-                DRAG TO ROTATE • SCROLL TO ZOOM • TYPING GEOMETRY
+                DRAG TO ROTATE • SCROLL TO ZOOM • CUSTOM PALETTE
             </div>
         </div>
     </div>
@@ -293,15 +313,16 @@
         };
 
         const themes = {
-            white: { color: '#ffffff', glitch: ['rgba(255,0,0,0.8)', 'rgba(0,255,255,0.8)'] },
-            matrix: { color: '#00ff41', glitch: ['rgba(0,255,0,0.8)', 'rgba(255,255,255,0.8)'] },
-            vaporwave: { color: '#ff71ce', glitch: ['rgba(0,255,255,0.8)', 'rgba(255,255,255,0.8)'] },
-            cyberpunk: { color: '#f3f315', glitch: ['rgba(255,0,255,0.8)', 'rgba(0,255,255,0.8)'] },
-            blood: { color: '#ff0000', glitch: ['rgba(100,0,0,0.8)', 'rgba(255,255,255,0.8)'] },
-            gold: { color: '#ffb000', glitch: ['rgba(255,100,0,0.8)', 'rgba(255,255,255,0.8)'] },
-            toxic: { color: '#adff2f', glitch: ['rgba(0,255,0,0.8)', 'rgba(255,255,255,0.8)'] },
-            deepsea: { color: '#00ced1', glitch: ['rgba(0,0,255,0.8)', 'rgba(255,255,255,0.8)'] },
-            ice: { color: '#f0f8ff', glitch: ['rgba(173,216,230,0.8)', 'rgba(255,255,255,0.8)'] }
+            white: { color: '#ffffff', bg: '#000000', glitch: ['rgba(255,0,0,0.8)', 'rgba(0,255,255,0.8)'] },
+            matrix: { color: '#00ff41', bg: '#000000', glitch: ['rgba(0,255,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            vaporwave: { color: '#ff71ce', bg: '#000000', glitch: ['rgba(0,255,255,0.8)', 'rgba(255,255,255,0.8)'] },
+            cyberpunk: { color: '#f3f315', bg: '#000000', glitch: ['rgba(255,0,255,0.8)', 'rgba(255,255,255,0.8)'] },
+            blood: { color: '#ff0000', bg: '#000000', glitch: ['rgba(100,0,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            gold: { color: '#ffb000', bg: '#000000', glitch: ['rgba(255,100,0,0.8)', 'rgba(255,255,255,0.8)'] },
+            toxic: { color: '#adff2f', bg: '#050a00', glitch: ['rgba(0,255,0,0.8)', 'rgba(255,0,0,0.8)'] },
+            deepsea: { color: '#00ced1', bg: '#00051a', glitch: ['rgba(0,0,255,0.8)', 'rgba(255,255,255,0.8)'] },
+            ice: { color: '#f0f8ff', bg: '#001a1a', glitch: ['rgba(173,216,230,0.8)', 'rgba(255,255,255,0.8)'] },
+            custom: { color: '#ffffff', bg: '#000000', glitch: ['rgba(255,0,0,0.8)', 'rgba(0,255,255,0.8)'] }
         };
 
         const params = { intensity: 1.5, animSpeed: 0.8, pauseThreshold: 0.3, rotationSpeed: 0.01, glitchIntensity: 0.3, resolution: 0.15, charset: 'standard', theme: 'white', shape: 'box', deformMode: 'twist' };
@@ -346,8 +367,16 @@
             };
             document.getElementById('emojiInput').oninput = createShape;
 
+            document.getElementById('themeSelect').onchange = (e) => { 
+                params.theme = e.target.value; 
+                document.getElementById('customColorGroup').classList.toggle('hidden', params.theme !== 'custom');
+                updateTheme(); 
+            };
+            
+            document.getElementById('bgColorPicker').oninput = () => { if(params.theme === 'custom') updateTheme(); };
+            document.getElementById('textColorPicker').oninput = () => { if(params.theme === 'custom') updateTheme(); };
+
             document.getElementById('deformIntensity').oninput = (e) => params.intensity = parseFloat(e.target.value);
-            document.getElementById('themeSelect').onchange = (e) => { params.theme = e.target.value; updateTheme(); };
             document.getElementById('charsetSelect').onchange = (e) => { params.charset = e.target.value; updateEffect(); };
             document.getElementById('resolution').oninput = (e) => { params.resolution = parseFloat(e.target.value); updateEffect(); };
             document.getElementById('animSpeed').oninput = (e) => params.animSpeed = parseFloat(e.target.value);
@@ -662,38 +691,67 @@
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
 
-        let frameCounter = 0;
         function captureAsciiToCanvas() {
             if (!isRecording || !recordingCtx || window.innerWidth === 0) return;
-            recordingCtx.fillStyle = 'black'; recordingCtx.fillRect(0, 0, recordingCanvas.width, recordingCanvas.height);
-            recordingCtx.fillStyle = themes[params.theme].color;
+            
+            // Dynamic Background and Text Colors from current state
+            const currentBg = params.theme === 'custom' ? document.getElementById('bgColorPicker').value : themes[params.theme].bg;
+            const currentText = params.theme === 'custom' ? document.getElementById('textColorPicker').value : themes[params.theme].color;
+
+            recordingCtx.fillStyle = currentBg; 
+            recordingCtx.fillRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+            recordingCtx.fillStyle = currentText;
+            
             const textElement = effect.domElement;
             const lines = textElement.innerText.split('\n');
             const fontSize = recordingCanvas.height / (lines.length || 1);
             recordingCtx.font = `${fontSize}px monospace`;
             lines.forEach((line, i) => { recordingCtx.fillText(line, 0, (i + 1) * fontSize); });
+            
             if (params.glitchIntensity > 0 && Math.random() < 0.1 * params.glitchIntensity) {
                 recordingCtx.globalCompositeOperation = 'screen';
                 recordingCtx.fillStyle = 'rgba(255,0,0,0.5)'; recordingCtx.fillText(textElement.innerText, (Math.random()-0.5)*10, fontSize);
                 recordingCtx.fillStyle = 'rgba(0,255,255,0.5)'; recordingCtx.fillText(textElement.innerText, (Math.random()-0.5)*-10, fontSize);
                 recordingCtx.globalCompositeOperation = 'source-over';
             }
-            if (activeFormat === 'gif') { frameCounter++; if (frameCounter % 3 === 0) { gifFrames.push(recordingCanvas.toDataURL('image/png')); } }
+            if (activeFormat === 'gif') { if (Math.random() > 0.5) gifFrames.push(recordingCanvas.toDataURL('image/png')); }
         }
 
         function updateEffect() {
             const container = document.getElementById('ascii-container');
             if (effect) container.removeChild(effect.domElement);
+            
             const w = Math.max(window.innerWidth, 1);
             const h = Math.max(window.innerHeight, 1);
             renderer.setSize(w, h);
-            effect = new THREE.AsciiEffect(renderer, charsets[params.charset], { invert: true, resolution: params.resolution });
+            
+            effect = new THREE.AsciiEffect(renderer, charsets[params.charset], { 
+                invert: true, 
+                resolution: params.resolution
+            });
+            
             effect.setSize(w, h);
             container.appendChild(effect.domElement);
             updateTheme();
         }
 
-        function updateTheme() { effect.domElement.style.color = themes[params.theme].color; effect.domElement.style.backgroundColor = 'black'; }
+        function updateTheme() { 
+            let bgColor, textColor;
+            
+            if (params.theme === 'custom') {
+                bgColor = document.getElementById('bgColorPicker').value;
+                textColor = document.getElementById('textColorPicker').value;
+            } else {
+                bgColor = themes[params.theme].bg;
+                textColor = themes[params.theme].color;
+            }
+
+            document.body.style.backgroundColor = bgColor;
+            if (effect) {
+                effect.domElement.style.color = textColor;
+                effect.domElement.style.backgroundColor = bgColor;
+            }
+        }
         
         function onWindowResize() { 
             const w = Math.max(window.innerWidth, 1);
@@ -737,9 +795,11 @@
         function updateGlitchEffect() {
             if (params.glitchIntensity <= 0) { effect.domElement.style.textShadow = 'none'; effect.domElement.style.transform = 'none'; return; }
             const intensity = params.glitchIntensity;
+            const currentGlitch = params.theme === 'custom' ? ['rgba(255,0,255,0.8)', 'rgba(0,255,255,0.8)'] : themes[params.theme].glitch;
+
             if (Math.random() < (0.1 * intensity) || Math.random() < 0.2) {
                 const rX = (Math.random() - 0.5) * 15 * intensity, bX = (Math.random() - 0.5) * -15 * intensity;
-                effect.domElement.style.textShadow = `${rX}px 0 ${themes[params.theme].glitch[0]}, ${bX}px 0 ${themes[params.theme].glitch[1]}`;
+                effect.domElement.style.textShadow = `${rX}px 0 ${currentGlitch[0]}, ${bX}px 0 ${currentGlitch[1]}`;
                 if (Math.random() < 0.05 * intensity) effect.domElement.style.transform = `translate(${(Math.random()-0.5)*20*intensity}px, 0) skew(${(Math.random()-0.5)*10*intensity}deg)`;
             } else { effect.domElement.style.textShadow = `none`; effect.domElement.style.transform = 'none'; }
         }
